@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>モンスト風反射ゲーム</title>
+  <style>
+    canvas {
+      border: 2px solid #333;
+      background: #eef;
+      display: block;
+      margin: auto;
+      touch-action: none;
+    }
+    #clearMessage {
+      text-align: center;
+      font-size: 32px;
+      font-weight: bold;
+      color: green;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="clearMessage">ステージクリア！</div>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const clearMessage = document.getElementById('clearMessage');
+
+    // 画像読み込み
+    const playerImg = new Image();
+    const enemyImg = new Image();
+    playerImg.src = 'player.png';
+    enemyImg.src = 'enemy.png';
+
+    const player = {
+      x: 200,
+      y: 500,
+      radius: 16,
+      vx: 0,
+      vy: 0,
+      isMoving: false,
+    };
+
+    const enemies = [
+      { x: 100, y: 100, radius: 20, hp: 1, maxHp: 1 },
+      { x: 200, y: 150, radius: 24, hp: 2, maxHp: 2 },
+      { x: 300, y: 200, radius: 28, hp: 3, maxHp: 3 },
+    ];
+
+    const damageTexts = []; // ダメージポップアップ
+
+    let touchStart = null;
+
+    canvas.addEventListener('pointerdown', e => {
+      if (player.isMoving) return;
+      const rect = canvas.getBoundingClientRect();
+      touchStart = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    });
+
+    canvas.addEventListener('pointerup', e => {
+      if (!touchStart || player.isMoving) return;
+      const rect = canvas.getBoundingClientRect();
+      const end = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+
+      const dx = touchStart.x - end.x;
+      const dy = touchStart.y - end.y;
+      const power = Math.min(Math.sqrt(dx * dx + dy * dy), 100) / 5;
+      const angle = Math.atan2(dy, dx);
+
+      player.vx = Math.cos(angle) * power;
+      player.vy = Math.sin(angle) * power;
+      player.isMoving = true;
+    });
+
+    function update() {
+      if (player.isMoving) {
+        player.x += player.vx;
+        player.y += player.vy;
+
+        // 壁反射
+        if (player.x - player.radius < 0 || player.x + player.radius > canvas.width) {
+          player.vx *= -1;
+          player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+        }
+        if (player.y - player.radius < 0 || player.y + player.radius > canvas.height) {
+          player.vy *= -1;
+          player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+        }
+
+        // 減速
+        player.vx *= 0.98;
+        player.vy *= 0.98;
+        if (Math.abs(player.vx) < 0.1 && Math.abs(player.vy) < 0.1) {
+          player.vx = 0;
+          player.vy = 0;
+          player.isMoving = false;
+        }
+
+        // 敵当たり判定
+        enemies.forEach(enemy => {
+          if (enemy.hp <= 0) return;
+          const dx = player.x - enemy.x;
+          const dy = player.y - enemy.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < player.radius + enemy.radius) {
+            enemy.hp--;
+            damageTexts.push({ x: enemy.x, y: enemy.y, value: '-1', alpha: 1 });
+            player.vx *= -1;
+            player.vy *= -1;
+          }
+        });
+      }
+
+      // ダメージテキスト更新
+      damageTexts.forEach(text => {
+        text.y -= 1;
+        text.alpha -= 0.02;
+      });
+      while (damageTexts.length > 0 && damageTexts[0].alpha <= 0) {
+        damageTexts.shift();
+      }
+
+      // ステージクリアチェック
+      if (enemies.every(e => e.hp <= 0)) {
+        clearMessage.style.display = 'block';
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 敵描画
+      enemies.forEach(enemy => {
+        if (enemy.hp <= 0) return;
+        ctx.drawImage(enemyImg, enemy.x - enemy.radius, enemy.y - enemy.radius, enemy.radius * 2, enemy.radius * 2);
+
+        // HPバー
+        ctx.fillStyle = 'black';
+        ctx.fillRect(enemy.x - 20, enemy.y - enemy.radius - 12, 40, 5);
+        ctx.fillStyle = 'red';
+        ctx.fillRect(enemy.x - 20, enemy.y - enemy.radius - 12, 40 * (enemy.hp / enemy.maxHp), 5);
+      });
+
+      // プレイヤー描画
+      ctx.drawImage(playerImg, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+
+      // ダメージテキスト描画
+      damageTexts.forEach(text => {
+        ctx.fillStyle = `rgba(255,0,0,${text.alpha})`;
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(text.value, text.x - 10, text.y);
+      });
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
