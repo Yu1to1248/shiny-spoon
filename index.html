@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>モンスト風反射ゲーム（複数ウェーブ＆エフェクト付き）</title>
+  <title>モンスト風反射ゲーム（丸＆四角描画版）</title>
   <style>
     canvas {
       background: #eef;
@@ -57,12 +57,6 @@
     const waveMessage = document.getElementById('waveMessage');
     const retryBtn = document.getElementById('retryBtn');
 
-    // 画像読み込み（画像ない場合は円表示）
-    const playerImg = new Image();
-    const enemyImg = new Image();
-    playerImg.src = 'player.png';
-    enemyImg.src = 'enemy.png';
-
     const player = {
       x: 200,
       y: 500,
@@ -72,21 +66,22 @@
       isMoving: false,
     };
 
-    // 各ウェーブ（ステージ）ごとの敵配置・設定
+    // 複数ウェーブ敵データ（円か四角で区別）
+    // shape: 'circle' or 'rect'
     const waves = [
       [
-        { x: 80, y: 120, radius: 20, hp: 1, maxHp: 1 },
-        { x: 300, y: 140, radius: 22, hp: 2, maxHp: 2 },
+        { x: 80, y: 120, radius: 20, hp: 1, maxHp: 1, shape: 'circle' },
+        { x: 300, y: 140, radius: 22, hp: 2, maxHp: 2, shape: 'rect' },
       ],
       [
-        { x: 60, y: 100, radius: 22, hp: 2, maxHp: 2 },
-        { x: 200, y: 150, radius: 25, hp: 3, maxHp: 3 },
-        { x: 340, y: 180, radius: 22, hp: 2, maxHp: 2 },
+        { x: 60, y: 100, radius: 22, hp: 2, maxHp: 2, shape: 'rect' },
+        { x: 200, y: 150, radius: 25, hp: 3, maxHp: 3, shape: 'circle' },
+        { x: 340, y: 180, radius: 22, hp: 2, maxHp: 2, shape: 'rect' },
       ],
       [
-        { x: 100, y: 130, radius: 25, hp: 4, maxHp: 4 },
-        { x: 300, y: 130, radius: 25, hp: 4, maxHp: 4 },
-        { x: 200, y: 170, radius: 28, hp: 5, maxHp: 5 },
+        { x: 100, y: 130, radius: 25, hp: 4, maxHp: 4, shape: 'circle' },
+        { x: 300, y: 130, radius: 25, hp: 4, maxHp: 4, shape: 'circle' },
+        { x: 200, y: 170, radius: 28, hp: 5, maxHp: 5, shape: 'rect' },
       ],
     ];
 
@@ -169,15 +164,33 @@
         // 敵当たり判定
         enemies.forEach(enemy => {
           if (enemy.hp <= 0) return;
-          const dx = player.x - enemy.x;
-          const dy = player.y - enemy.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < player.radius + enemy.radius) {
-            enemy.hp--;
-            damageTexts.push({ x: enemy.x, y: enemy.y, value: '-1', alpha: 1 });
-            hitEffects.push(createHitEffect(enemy.x, enemy.y));
-            player.vx *= -1;
-            player.vy *= -1;
+
+          let dist = 0;
+          if(enemy.shape === 'circle'){
+            const dx = player.x - enemy.x;
+            const dy = player.y - enemy.y;
+            dist = Math.sqrt(dx * dx + dy * dy);
+            if(dist < player.radius + enemy.radius){
+              enemy.hp--;
+              damageTexts.push({ x: enemy.x, y: enemy.y, value: '-1', alpha: 1 });
+              hitEffects.push(createHitEffect(enemy.x, enemy.y));
+              player.vx *= -1;
+              player.vy *= -1;
+            }
+          } else if(enemy.shape === 'rect'){
+            // 矩形は中心から半径の四角形判定
+            if(
+              player.x + player.radius > enemy.x - enemy.radius &&
+              player.x - player.radius < enemy.x + enemy.radius &&
+              player.y + player.radius > enemy.y - enemy.radius &&
+              player.y - player.radius < enemy.y + enemy.radius
+            ){
+              enemy.hp--;
+              damageTexts.push({ x: enemy.x, y: enemy.y, value: '-1', alpha: 1 });
+              hitEffects.push(createHitEffect(enemy.x, enemy.y));
+              player.vx *= -1;
+              player.vy *= -1;
+            }
           }
         });
       }
@@ -210,7 +223,6 @@
         if (currentWave < waves.length) {
           waveMessage.textContent = `WAVE ${currentWave} クリア！ 3秒後に次のウェーブへ`;
           player.isMoving = false;
-          // 3秒後に次のウェーブを読み込む
           setTimeout(() => {
             loadWave(currentWave);
           }, 3000);
@@ -225,17 +237,22 @@
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 敵描画
+      // 敵描画（丸 or 四角）
       enemies.forEach(enemy => {
         if (enemy.hp <= 0) return;
-        if (enemyImg.complete && enemyImg.naturalWidth !== 0) {
-          ctx.drawImage(enemyImg, enemy.x - enemy.radius, enemy.y - enemy.radius, enemy.radius * 2, enemy.radius * 2);
-        } else {
+
+        // ヒット時のフラッシュ効果用アルファ計算（hitEffectsでやるので省略）
+
+        if(enemy.shape === 'circle'){
           ctx.beginPath();
           ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
           ctx.fillStyle = 'green';
           ctx.fill();
+        } else if(enemy.shape === 'rect'){
+          ctx.fillStyle = 'blue';
+          ctx.fillRect(enemy.x - enemy.radius, enemy.y - enemy.radius, enemy.radius * 2, enemy.radius * 2);
         }
+
         // HPバー
         ctx.fillStyle = 'black';
         ctx.fillRect(enemy.x - 20, enemy.y - enemy.radius - 12, 40, 5);
@@ -243,15 +260,11 @@
         ctx.fillRect(enemy.x - 20, enemy.y - enemy.radius - 12, 40 * (enemy.hp / enemy.maxHp), 5);
       });
 
-      // プレイヤー描画
-      if (playerImg.complete && playerImg.naturalWidth !== 0) {
-        ctx.drawImage(playerImg, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
-      } else {
-        ctx.beginPath();
-        ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'red';
-        ctx.fill();
-      }
+      // プレイヤー描画（赤い丸）
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'red';
+      ctx.fill();
 
       // ダメージテキスト描画
       damageTexts.forEach(text => {
@@ -260,15 +273,15 @@
         ctx.fillText(text.value, text.x - 10, text.y);
       });
 
-      // ヒットエフェクト描画（パーティクル）
+      // ヒットエフェクト描画（パーティクル＆フラッシュ）
       hitEffects.forEach(effect => {
-        // フラッシュ
-        ctx.fillStyle = `rgba(255,255,255,${Math.min(0.6, effect.life * 2)})`;
+        // フラッシュ（白円がフェードアウト）
+        ctx.fillStyle = `rgba(255, 255, 255, ${effect.life * 2})`;
         ctx.beginPath();
         ctx.arc(effect.x, effect.y, 20, 0, Math.PI * 2);
         ctx.fill();
 
-        // パーティクル
+        // パーティクル（黄色小円）
         effect.particles.forEach(p => {
           ctx.fillStyle = `rgba(255, 255, 0, ${p.alpha})`;
           ctx.beginPath();
@@ -280,12 +293,11 @@
 
     function createHitEffect(x, y) {
       const particles = [];
-      for (let i = 0; i < 10; i++) {
+      for(let i=0; i<10; i++){
         const angle = Math.random() * Math.PI * 2;
         const speed = Math.random() * 2 + 1;
         particles.push({
-          x,
-          y,
+          x, y,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
           life: 1,
@@ -302,9 +314,6 @@
       requestAnimationFrame(loop);
     }
 
-    // 初期ウェーブ読み込み
-    loadWave(currentWave);
-
     retryBtn.onclick = () => {
       currentWave = 0;
       loadWave(currentWave);
@@ -312,22 +321,10 @@
       retryBtn.style.display = 'none';
     };
 
-    // 画像読み込み後にゲーム開始（なくても円描画で動く）
-    let imagesLoaded = 0;
-    function checkImagesLoaded() {
-      imagesLoaded++;
-      if (imagesLoaded >= 2) {
-        loop();
-      }
-    }
-    playerImg.onload = checkImagesLoaded;
-    enemyImg.onload = checkImagesLoaded;
-    // 画像が無い場合も3秒後に開始
-    setTimeout(() => {
-      if (imagesLoaded < 2) {
-        loop();
-      }
-    }, 3000);
+    // ゲーム開始
+    loadWave(currentWave);
+    loop();
+
   </script>
 </body>
 </html>
